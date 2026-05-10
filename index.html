@@ -28,54 +28,68 @@
             const response = await fetch(csvUrl);
             const data = await response.text();
             
+            // Разбиваем на строки и убираем пустые
             const rows = data.split(/\r?\n/).filter(row => row.trim() !== "").slice(1); 
             container.innerHTML = ''; 
 
-            rows.forEach((row) => {
-                const cols = row.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g);
-                if (!cols || cols.length < 5) return;
+            rows.forEach((row, index) => {
+                try {
+                    // Надежный парсинг CSV (учитываем запятые в кавычках)
+                    const cols = row.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g);
+                    
+                    // Если колонок меньше 5 или нет заголовка — это "битая" строка, пропускаем
+                    if (!cols || cols.length < 5 || !cols[4]) return;
 
-                const clean = (t) => t ? t.replace(/^["']+|["']+$/g, '').trim() : '';
+                    const clean = (t) => t ? t.replace(/^["']+|["']+$/g, '').trim() : '';
 
-                const category = clean(cols[1]);
-                const title = clean(cols[4]);
-                const desc = clean(cols[6]);
-                const url = clean(cols[7]);
-                
-                // 1. Ищем ссылку в колонке 9 или 4
-                let rawImg = clean(cols[8]);
-                if (!rawImg || !rawImg.includes('http')) {
-                    const match = (cols[3] || "").match(/https?:\/\/[^"'\s)]+/);
-                    rawImg = match ? match[0] : "";
-                }
+                    const category = clean(cols[1]) || "Новини";
+                    const title = clean(cols[4]);
+                    const desc = clean(cols[6]) || "";
+                    const url = clean(cols[7]) || "#";
+                    
+                    // Ищем ссылку на фото (в 9-й или 4-й колонке)
+                    let rawImg = clean(cols[8]);
+                    if (!rawImg || !rawImg.startsWith('http')) {
+                        const match = (cols[3] || "").match(/https?:\/\/[^"'\s)]+/);
+                        rawImg = match ? match[0] : "";
+                    }
 
-                // 2. ИСПРАВЛЕНИЕ MIXED CONTENT (Заменяем http на https)
-                let imgUrl = rawImg.replace(/^http:\/\//i, 'https://');
+                    // ФИКС КАРТИНОК: если ссылка http, пропускаем через прокси для https
+                    let imgUrl = rawImg;
+                    if (rawImg && rawImg.startsWith('http://')) {
+                        imgUrl = `https://wsrv.nl/?url=${encodeURIComponent(rawImg)}`;
+                    }
 
-                // 3. Если ссылки нет, используем надежный placehold.co
-                if (!imgUrl || !imgUrl.startsWith('https')) {
-                    imgUrl = 'https://placehold.co/600x400/e9ecef/6c757d?text=No+Photo';
-                }
+                    // Заглушка, если фото совсем нет
+                    if (!imgUrl) {
+                        imgUrl = 'https://placehold.co/600x400/e9ecef/6c757d?text=No+Photo';
+                    }
 
-                container.innerHTML += `
-                    <div class="col-md-4 mb-4">
-                        <div class="card h-100 shadow-sm border-0">
-                            <img src="${imgUrl}" class="card-img-top" 
-                                 style="height:200px; object-fit:cover;"
-                                 onerror="this.onerror=null;this.src='https://placehold.co/600x400/e9ecef/6c757d?text=Image+Error'">
-                            <div class="card-body d-flex flex-column">
-                                <span class="badge bg-primary mb-2" style="width:fit-content;">${category}</span>
-                                <h5 class="card-title h6 fw-bold">${title}</h5>
-                                <p class="card-text text-muted small">${desc.substring(0, 100)}...</p>
-                                <div class="mt-auto">
-                                    <a href="${url}" target="_blank" class="btn btn-primary btn-sm w-100">Читати далі</a>
+                    container.innerHTML += `
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100 shadow-sm border-0">
+                                <img src="${imgUrl}" class="card-img-top" 
+                                     style="height:200px; object-fit:cover;"
+                                     referrerpolicy="no-referrer"
+                                     onerror="this.onerror=null;this.src='https://placehold.co/600x400/e9ecef/6c757d?text=Image+Error'">
+                                <div class="card-body d-flex flex-column">
+                                    <span class="badge bg-primary mb-2" style="width:fit-content;">${category}</span>
+                                    <h5 class="card-title h6 fw-bold">${title}</h5>
+                                    <p class="card-text text-muted small">${desc.substring(0, 100)}...</p>
+                                    <div class="mt-auto">
+                                        <a href="${url}" target="_blank" class="btn btn-primary btn-sm w-100">Читати далі</a>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>`;
+                        </div>`;
+                } catch (rowErr) {
+                    console.warn("Пропущена строка из-за ошибки данных:", rowErr);
+                }
             });
+
         } catch (error) {
-            console.error('Помилка:', error);
+            console.error('Ошибка загрузки данных:', error);
+            container.innerHTML = '<p class="text-center">Помилка завантаження новин.</p>';
         }
     }
     loadNews();
