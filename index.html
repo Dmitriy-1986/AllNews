@@ -20,81 +20,86 @@
     </div>
 
     <script>
+    // Ваша ссылка на CSV
     const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSbFfmcdU2JUcOo5qy687PbsjiAIOV8Xarp2vy0QK-IwBtVWGi7DuggMYMLsN1AteZ1SSMIQPw8Ue6Q/pub?gid=0&single=true&output=csv';
 
     async function loadNews() {
         try {
-            console.log("Завантаження даних...");
             const response = await fetch(csvUrl);
             const data = await response.text();
             
-            // Розбиваємо на рядки, прибираємо порожні
+            // Разбиваем на строки, убираем пустые
             const rows = data.split(/\r?\n/).filter(row => row.trim() !== "");
-            const header = rows.shift(); // Видаляємо заголовок
+            rows.shift(); // Удаляем шапку
 
             const container = document.getElementById('news-container');
             container.innerHTML = ''; 
 
             rows.forEach((row, index) => {
                 try {
-                    // Використовуємо надійніший метод розбиття CSV, враховуючи лапки
-                    const cols = row.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g);
-                    
-                    // Перевірка: чи достатньо колонок (мінімум 8)
-                    if (!cols || cols.length < 8) return;
+                    // Продвинутый парсер CSV: корректно обрабатывает запятые внутри кавычек
+                    const cols = [];
+                    let startValue = 0;
+                    let inQuotes = false;
 
-                    const clean = (text) => text ? text.replace(/^"|"$/g, '').trim() : '';
+                    for (let i = 0; i < row.length; i++) {
+                        if (row[i] === '"') inQuotes = !inQuotes;
+                        if (row[i] === ',' && !inQuotes) {
+                            cols.push(row.substring(startValue, i));
+                            startValue = i + 1;
+                        }
+                    }
+                    cols.push(row.substring(startValue));
 
-                    // Призначаємо змінні з безпечною перевіркою
-                    const category = clean(cols[1]) || 'General';
-                    const title = clean(cols[4]) || 'Без заголовка';
-                    const desc = clean(cols[6]) || '';
-                    const url = clean(cols[7]) || '#';
+                    // Если колонок мало, пропускаем
+                    if (cols.length < 8) return;
+
+                    const clean = (text) => text ? text.replace(/^"|"$/g, '').replace(/""/g, '"').trim() : '';
+
+                    // Привязка к вашим колонкам:
+                    const category = clean(cols[1]);
+                    const title = clean(cols[4]);
+                    const desc = clean(cols[6]);
+                    const url = clean(cols[7]);
                     
-                    // Пріоритет: 9-та колонка (чисте фото), якщо немає - витягуємо з 4-ї
+                    // Проверяем 9-ю колонку (Raw Image), если её нет — берем из 4-й (Preview)
                     let imgUrl = '';
-                    if (cols.length >= 9) {
+                    if (cols[8]) {
                         imgUrl = clean(cols[8]);
-                    } else if (cols[3] && cols[3].includes('http')) {
+                    } else {
+                        // Вытягиваем ссылку из формулы =IMAGE("url")
                         const match = cols[3].match(/https?:\/\/[^"]+/);
                         imgUrl = match ? match[0] : '';
                     }
 
                     if (!imgUrl || imgUrl === 'No Image') {
-                        imgUrl = 'https://via.placeholder.com/400x200?text=News+Photo';
+                        imgUrl = 'https://via.placeholder.com/400x200?text=News+Image';
                     }
 
-                    const cardHtml = `
+                    container.innerHTML += `
                         <div class="col-md-4 mb-4">
-                            <div class="card news-card shadow-sm h-100">
-                                <img src="${imgUrl}" class="card-img-top news-img" onerror="this.src='https://via.placeholder.com/400x200?text=Image+Error'">
+                            <div class="card shadow-sm h-100">
+                                <img src="${imgUrl}" class="card-img-top news-img" style="height:200px; object-fit:cover;" onerror="this.src='https://via.placeholder.com/400x200?text=Image+Error'">
                                 <div class="card-body d-flex flex-column">
-                                    <span class="badge bg-primary mb-2" style="width: fit-content;">${category}</span>
+                                    <span class="badge bg-primary mb-2" style="width:fit-content;">${category}</span>
                                     <h5 class="card-title">${title}</h5>
-                                    <p class="card-text text-muted small">${desc.substring(0, 120)}...</p>
+                                    <p class="card-text text-muted small">${desc.substring(0, 150)}...</p>
                                     <div class="mt-auto">
                                         <a href="${url}" target="_blank" class="btn btn-outline-primary btn-sm w-100">Читати далі</a>
                                     </div>
                                 </div>
                             </div>
                         </div>`;
-                    container.innerHTML += cardHtml;
-                } catch (rowError) {
-                    console.warn(`Помилка в рядку ${index}:`, rowError);
+                } catch (e) {
+                    console.error("Ошибка в строке " + index, e);
                 }
             });
-
-            if (container.innerHTML === '') {
-                container.innerHTML = '<p class="text-center">Новини знайдено, але не вдалося відобразити. Перевірте формат даних.</p>';
-            }
-
         } catch (error) {
-            console.error('Критична помилка завантаження:', error);
-            document.getElementById('news-container').innerHTML = '<p class="text-center">Помилка з\'єднання з таблицею.</p>';
+            console.error('Ошибка загрузки:', error);
         }
     }
-
     loadNews();
 </script>
+    
 </body>
 </html>
