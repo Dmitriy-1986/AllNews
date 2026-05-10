@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Моя Стрічка Новин</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        .news-card { margin-bottom: 20px; border-radius: 10px; overflow: hidden; height: 100%; }
+        .news-img { width: 100%; height: 200px; object-fit: cover; background-color: #e9ecef; }
+        .card-body { display: flex; flex-direction: column; }
+        .btn-read { margin-top: auto; }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container py-5">
+        <h1 class="text-center mb-5">Останні Новини</h1>
+        <div id="news-container" class="row">
+            </div>
+    </div>
+
+    <script>
+        const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSbFfmcdU2JUcOo5qy687PbsjiAIOV8Xarp2vy0QK-IwBtVWGi7DuggMYMLsN1AteZ1SSMIQPw8Ue6Q/pub?gid=0&single=true&output=csv';
+
+        async function loadNews() {
+            try {
+                const response = await fetch(csvUrl);
+                const data = await response.text();
+                
+                // Розбиваємо на рядки, очищуємо від порожніх рядків
+                const rows = data.split('\n').filter(row => row.trim() !== '').slice(1); 
+
+                const container = document.getElementById('news-container');
+                container.innerHTML = ''; // Очищуємо контейнер перед завантаженням
+
+                rows.forEach(row => {
+                    // Розумне розбиття CSV (враховує коми всередині лапок)
+                    const cols = row.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+                    
+                    if (!cols || cols.length < 8) return;
+
+                    // Прибираємо зайві лапки, які додає Google CSV
+                    const clean = (text) => text ? text.replace(/^"|"$/g, '').trim() : '';
+
+                    const category = clean(cols[1]);
+                    const title = clean(cols[4]);
+                    const desc = clean(cols[6]);
+                    const url = clean(cols[7]);
+                    // Беремо чисте посилання на фото з 9-ї колонки (індекс 8)
+                    const imgUrl = cols[8] ? clean(cols[8]) : 'https://via.placeholder.com/400x200?text=No+Image';
+
+                    const cardHtml = `
+                        <div class="col-md-4 mb-4">
+                            <div class="card news-card shadow-sm h-100">
+                                <img src="${imgUrl}" class="card-img-top news-img" onerror="this.src='https://via.placeholder.com/400x200?text=Error+Loading'">
+                                <div class="card-body">
+                                    <span class="badge bg-primary mb-2" style="width: fit-content;">${category}</span>
+                                    <h5 class="card-title">${title}</h5>
+                                    <p class="card-text text-muted small">${desc.substring(0, 120)}...</p>
+                                    <div class="btn-read">
+                                        <a href="${url}" target="_blank" class="btn btn-outline-primary btn-sm w-100">Читати далі</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>`;
+                    container.innerHTML += cardHtml;
+                });
+            } catch (error) {
+                console.error('Помилка завантаження новин:', error);
+                document.getElementById('news-container').innerHTML = '<p class="text-center">Не вдалося завантажити новини.</p>';
+            }
+        }
+
+        loadNews();
+    </script>
+</body>
+</html>
