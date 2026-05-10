@@ -20,58 +20,81 @@
     </div>
 
     <script>
-        const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSbFfmcdU2JUcOo5qy687PbsjiAIOV8Xarp2vy0QK-IwBtVWGi7DuggMYMLsN1AteZ1SSMIQPw8Ue6Q/pub?gid=0&single=true&output=csv';
+    const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSbFfmcdU2JUcOo5qy687PbsjiAIOV8Xarp2vy0QK-IwBtVWGi7DuggMYMLsN1AteZ1SSMIQPw8Ue6Q/pub?gid=0&single=true&output=csv';
 
-        async function loadNews() {
-            try {
-                const response = await fetch(csvUrl);
-                const data = await response.text();
-                
-                // Розбиваємо на рядки, очищуємо від порожніх рядків
-                const rows = data.split('\n').filter(row => row.trim() !== '').slice(1); 
+    async function loadNews() {
+        try {
+            console.log("Завантаження даних...");
+            const response = await fetch(csvUrl);
+            const data = await response.text();
+            
+            // Розбиваємо на рядки, прибираємо порожні
+            const rows = data.split(/\r?\n/).filter(row => row.trim() !== "");
+            const header = rows.shift(); // Видаляємо заголовок
 
-                const container = document.getElementById('news-container');
-                container.innerHTML = ''; // Очищуємо контейнер перед завантаженням
+            const container = document.getElementById('news-container');
+            container.innerHTML = ''; 
 
-                rows.forEach(row => {
-                    // Розумне розбиття CSV (враховує коми всередині лапок)
-                    const cols = row.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+            rows.forEach((row, index) => {
+                try {
+                    // Використовуємо надійніший метод розбиття CSV, враховуючи лапки
+                    const cols = row.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g);
                     
+                    // Перевірка: чи достатньо колонок (мінімум 8)
                     if (!cols || cols.length < 8) return;
 
-                    // Прибираємо зайві лапки, які додає Google CSV
                     const clean = (text) => text ? text.replace(/^"|"$/g, '').trim() : '';
 
-                    const category = clean(cols[1]);
-                    const title = clean(cols[4]);
-                    const desc = clean(cols[6]);
-                    const url = clean(cols[7]);
-                    // Беремо чисте посилання на фото з 9-ї колонки (індекс 8)
-                    const imgUrl = cols[8] ? clean(cols[8]) : 'https://via.placeholder.com/400x200?text=No+Image';
+                    // Призначаємо змінні з безпечною перевіркою
+                    const category = clean(cols[1]) || 'General';
+                    const title = clean(cols[4]) || 'Без заголовка';
+                    const desc = clean(cols[6]) || '';
+                    const url = clean(cols[7]) || '#';
+                    
+                    // Пріоритет: 9-та колонка (чисте фото), якщо немає - витягуємо з 4-ї
+                    let imgUrl = '';
+                    if (cols.length >= 9) {
+                        imgUrl = clean(cols[8]);
+                    } else if (cols[3] && cols[3].includes('http')) {
+                        const match = cols[3].match(/https?:\/\/[^"]+/);
+                        imgUrl = match ? match[0] : '';
+                    }
+
+                    if (!imgUrl || imgUrl === 'No Image') {
+                        imgUrl = 'https://via.placeholder.com/400x200?text=News+Photo';
+                    }
 
                     const cardHtml = `
                         <div class="col-md-4 mb-4">
                             <div class="card news-card shadow-sm h-100">
-                                <img src="${imgUrl}" class="card-img-top news-img" onerror="this.src='https://via.placeholder.com/400x200?text=Error+Loading'">
-                                <div class="card-body">
+                                <img src="${imgUrl}" class="card-img-top news-img" onerror="this.src='https://via.placeholder.com/400x200?text=Image+Error'">
+                                <div class="card-body d-flex flex-column">
                                     <span class="badge bg-primary mb-2" style="width: fit-content;">${category}</span>
                                     <h5 class="card-title">${title}</h5>
                                     <p class="card-text text-muted small">${desc.substring(0, 120)}...</p>
-                                    <div class="btn-read">
+                                    <div class="mt-auto">
                                         <a href="${url}" target="_blank" class="btn btn-outline-primary btn-sm w-100">Читати далі</a>
                                     </div>
                                 </div>
                             </div>
                         </div>`;
                     container.innerHTML += cardHtml;
-                });
-            } catch (error) {
-                console.error('Помилка завантаження новин:', error);
-                document.getElementById('news-container').innerHTML = '<p class="text-center">Не вдалося завантажити новини.</p>';
-            }
-        }
+                } catch (rowError) {
+                    console.warn(`Помилка в рядку ${index}:`, rowError);
+                }
+            });
 
-        loadNews();
-    </script>
+            if (container.innerHTML === '') {
+                container.innerHTML = '<p class="text-center">Новини знайдено, але не вдалося відобразити. Перевірте формат даних.</p>';
+            }
+
+        } catch (error) {
+            console.error('Критична помилка завантаження:', error);
+            document.getElementById('news-container').innerHTML = '<p class="text-center">Помилка з\'єднання з таблицею.</p>';
+        }
+    }
+
+    loadNews();
+</script>
 </body>
 </html>
