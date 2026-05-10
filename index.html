@@ -128,7 +128,7 @@
         
         filterBox.innerHTML = categories.map(cat => {
             const displayName = categoryTranslations[cat] || cat; // Використовуємо переклад
-            return `<button class="btn btn-outline-primary ${cat === currentCategory ? 'active-cat' : ''}" 
+            return `<button class="btn btn-outline-primary m-1 ${cat === currentCategory ? 'active-cat' : ''}" 
                              onclick="filterCategory('${cat}', this)">${displayName}</button>`;
         }).join('');
     }
