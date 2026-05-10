@@ -40,6 +40,20 @@
 <script>
     const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSbFfmcdU2JUcOo5qy687PbsjiAIOV8Xarp2vy0QK-IwBtVWGi7DuggMYMLsN1AteZ1SSMIQPw8Ue6Q/pub?gid=0&single=true&output=csv';
     
+    // Словник для перекладу категорій (відображення в UI)
+    const categoryTranslations = {
+        'Всі': 'Всі',
+        'general': 'Головне',
+        'world': 'Світ',
+        'nation': 'Україна',
+        'business': 'Бізнес',
+        'technology': 'Технології',
+        'entertainment': 'Розваги',
+        'sports': 'Спорт',
+        'science': 'Наука',
+        'health': 'Здоров\'я'
+    };
+
     let allNews = [];
     let filteredNews = [];
     let currentCategory = 'Всі';
@@ -52,7 +66,6 @@
             if (!response.ok) throw new Error('Мережева помилка');
             const data = await response.text();
             
-            // Розбиваємо на рядки, ігноруючи порожні
             const rows = data.split(/\r?\n/).filter(row => row.trim().length > 0).slice(1);
             
             allNews = rows.map(row => {
@@ -61,7 +74,7 @@
                 if (!title) return null;
 
                 return {
-                    category: clean(cols[1]) || "Новини",
+                    category: clean(cols[1]) || "general", // Значення для логіки
                     title: title,
                     desc: clean(cols[6]) || "",
                     url: clean(cols[7]) || "#",
@@ -93,36 +106,31 @@
 
     function clean(t) {
         if (!t) return '';
-        // Видаляємо зовнішні лапки та замінюємо подвійні "" на одинарні "
         return t.replace(/^"|"$/g, '').replace(/""/g, '"').trim();
     }
 
     function getImgUrl(cols) {
-        // 1. Пріоритет: чисте посилання з 9-ї колонки (індекс 8)
         let raw = clean(cols[8]);
-        
-        // 2. Якщо порожньо, шукаємо посилання в 4-й колонці (індекс 3) через regex
         if (!raw || !raw.startsWith('http')) {
             const match = (cols[3] || "").match(/https?:\/\/[^"'\s)]+/);
             raw = match ? match[0] : "";
         }
 
-        // 3. Якщо посилання знайдено, пропускаємо через проксі для обходу блокувань та Mixed Content
         if (raw) {
-            // wsrv.nl автоматично обробляє .webp, .jpg та обходить захист unn.ua
             return `https://wsrv.nl/?url=${encodeURIComponent(raw)}&w=600&h=400&fit=cover&default=https://placehold.co/600x400?text=Format+Error`;
         }
-        
         return 'https://placehold.co/600x400/e9ecef/6c757d?text=No+Photo';
     }
 
     function createCategoryButtons() {
         const categories = ['Всі', ...new Set(allNews.map(n => n.category))];
         const filterBox = document.getElementById('category-filters');
-        filterBox.innerHTML = categories.map(cat => 
-            `<button class="btn btn-outline-primary ${cat === 'Всі' ? 'active-cat' : ''}" 
-                     onclick="filterCategory('${cat}', this)">${cat}</button>`
-        ).join('');
+        
+        filterBox.innerHTML = categories.map(cat => {
+            const displayName = categoryTranslations[cat] || cat; // Використовуємо переклад
+            return `<button class="btn btn-outline-primary ${cat === currentCategory ? 'active-cat' : ''}" 
+                             onclick="filterCategory('${cat}', this)">${displayName}</button>`;
+        }).join('');
     }
 
     function filterCategory(cat, btn) {
@@ -131,10 +139,6 @@
         
         document.querySelectorAll('#category-filters .btn').forEach(b => b.classList.remove('active-cat'));
         if (btn) btn.classList.add('active-cat');
-        else {
-             const allBtn = document.querySelector('#category-filters btn:first-child');
-             if(allBtn) allBtn.classList.add('active-cat');
-        }
 
         filteredNews = (cat === 'Всі') ? allNews : allNews.filter(n => n.category === cat);
         renderNews();
@@ -151,21 +155,24 @@
             return;
         }
 
-        container.innerHTML = pageItems.map(item => `
-            <div class="col-md-4 mb-4">
-                <div class="card h-100 shadow-sm news-card">
-                    <img src="${item.img}" class="card-img-top news-img" 
-                         referrerpolicy="no-referrer"
-                         onerror="this.onerror=null;this.src='https://placehold.co/600x400?text=Image+Error'">
-                    <div class="card-body">
-                        <span class="badge bg-primary mb-2">${item.category}</span>
-                        <h5 class="card-title h6 fw-bold text-dark">${item.title}</h5>
-                        <p class="card-text text-muted small">${item.desc.substring(0, 90)}...</p>
-                        <a href="${item.url}" target="_blank" class="btn btn-primary btn-sm w-100 mt-auto">Читати далі</a>
+        container.innerHTML = pageItems.map(item => {
+            const displayCat = categoryTranslations[item.category] || item.category; // Переклад для бейджа
+            return `
+                <div class="col-md-4 mb-4">
+                    <div class="card h-100 shadow-sm news-card">
+                        <img src="${item.img}" class="card-img-top news-img" 
+                             referrerpolicy="no-referrer"
+                             onerror="this.onerror=null;this.src='https://placehold.co/600x400?text=Image+Error'">
+                        <div class="card-body">
+                            <span class="badge bg-primary mb-2">${displayCat}</span>
+                            <h5 class="card-title h6 fw-bold text-dark">${item.title}</h5>
+                            <p class="card-text text-muted small">${item.desc.substring(0, 90)}...</p>
+                            <a href="${item.url}" target="_blank" class="btn btn-primary btn-sm w-100 mt-auto">Читати далі</a>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         renderPagination();
         window.scrollTo(0, 0);
@@ -178,7 +185,6 @@
 
         if (totalPages <= 1) return;
 
-        // Обмеження кількості кнопок, якщо сторінок дуже багато
         for (let i = 1; i <= totalPages; i++) {
             nav.innerHTML += `
                 <li class="page-item ${i === currentPage ? 'active' : ''}">
