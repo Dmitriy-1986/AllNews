@@ -178,6 +178,7 @@
         window.scrollTo(0, 0);
     }
 
+    /*
     function renderPagination() {
         const totalPages = Math.ceil(filteredNews.length / itemsPerPage);
         const nav = document.getElementById('pagination');
@@ -192,7 +193,67 @@
                 </li>`;
         }
     }
+*/
 
+    function renderPagination() {
+    const totalPages = Math.ceil(filteredNews.length / itemsPerPage);
+    const nav = document.getElementById('pagination');
+
+    nav.innerHTML = '';
+
+    if (totalPages <= 1) return;
+
+    const pages = [];
+
+    // Первая страница
+    pages.push(1);
+
+    // Многоточие слева
+    if (currentPage > 4) {
+        pages.push('...');
+    }
+
+    // Страницы вокруг текущей
+    for (
+        let i = Math.max(2, currentPage - 1);
+        i <= Math.min(totalPages - 1, currentPage + 1);
+        i++
+    ) {
+        pages.push(i);
+    }
+
+    // Многоточие справа
+    if (currentPage < totalPages - 3) {
+        pages.push('...');
+    }
+
+    // Последняя страница
+    if (totalPages > 1) {
+        pages.push(totalPages);
+    }
+
+    nav.innerHTML = pages.map(p => {
+        if (p === '...') {
+            return `
+                <li class="page-item disabled">
+                    <span class="page-link">...</span>
+                </li>
+            `;
+        }
+
+        return `
+            <li class="page-item ${p === currentPage ? 'active' : ''}">
+                <a class="page-link"
+                   href="javascript:void(0)"
+                   onclick="changePage(${p})">
+                   ${p}
+                </a>
+            </li>
+        `;
+    }).join('');
+}
+
+    
     function changePage(page) {
         currentPage = page;
         renderNews();
